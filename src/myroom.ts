@@ -44,7 +44,16 @@ export class myroom {
                     for (var r = 0; r < road.length; r++) {
                         for (var xp = -1; xp < 2; xp++) {
                             for (var yp = -1; yp < 2; yp++) {
-                                room.createConstructionSite(road[r].x + xp, road[r].y + yp, STRUCTURE_EXTENSION);
+                                var look = room.lookAt(road[r].x + xp, road[r].y + yp);
+                                var Canbuild = true;
+                                for (var l = 0; l < look.length; l++) {
+                                    if (look[l].structure) {
+                                        Canbuild = false;
+                                        break;
+                                    }
+                                }
+                                if (Canbuild)
+                                    room.createConstructionSite(road[r].x + xp, road[r].y + yp, STRUCTURE_EXTENSION);
                             }
                         }
                     }
@@ -53,7 +62,16 @@ export class myroom {
                 for (var r = 0; r < road.length; r++) {
                     for (var xp = -1; xp < 2; xp++) {
                         for (var yp = -1; yp < 2; yp++) {
-                            room.createConstructionSite(road[r].x + xp, road[r].y + yp, STRUCTURE_EXTENSION);
+                            var look = room.lookAt(road[r].x + xp, road[r].y + yp);
+                            var Canbuild = true;
+                            for (var l = 0; l < look.length; l++) {
+                                if (look[l].structure) {
+                                    Canbuild = false;
+                                    break;
+                                }
+                            }
+                            if (Canbuild)
+                                room.createConstructionSite(road[r].x + xp, road[r].y + yp, STRUCTURE_EXTENSION);
                         }
                     }
                 }
@@ -61,10 +79,31 @@ export class myroom {
         }
     }
 
-    public static createCreep(room: Room) {
-        const haverster = [[WORK,CARRY,MOVE,MOVE],
-        [WORK,WORK,CARRY,CARRY,MOVE,MOVE,MOVE,MOVE],
-        [WORK,WORK,WORK,CARRY,CARRY,CARRY,MOVE,MOVE,MOVE,MOVE,MOVE,MOVE]]
+    public static createHavester(room: Room, newsourcenum: string) {
+        const haverstermodel = [[WORK, CARRY, MOVE, MOVE],
+        [WORK, WORK, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE],
+        [WORK, WORK, WORK, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
+        [WORK, WORK, WORK, WORK, WORK, CARRY, CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE]];
+        const haverstercost = [250, 500, 750, 1250];
 
+        for (var i = haverstercost.length - 1; i >= 0; i--) {
+            if (room.energyAvailable >= haverstercost[i]) {
+                console.log("room.energyAvailable:", room.energyAvailable)
+                const spawns = room.find(FIND_STRUCTURES, {
+                    filter: (structure) => {
+                        return (structure.structureType == STRUCTURE_SPAWN);
+                    }
+                });
+                for (var j = 0; j < spawns.length; j++) {
+                    var s = <StructureSpawn>spawns[j]
+                    if (!s.spawning) {
+                        var newName = "Lv." + i + " Havester " + Game.time
+                        s.spawnCreep(haverstermodel[i], newName,
+                            { memory: { role: 'havester', workingType: "wait", source: newsourcenum, target: ""} });
+                    }
+                }
+                break;
+            }
+        }
     }
 }

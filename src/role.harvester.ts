@@ -3,79 +3,189 @@ export class roleHarvester {
     /** @param {Creep} creep **/
     public static run(creep: Creep) {
 
-        if (creep.memory.working && creep.carry.energy == 0) {
-            creep.memory.working = false;
-            creep.say('recharge');
-        }
-        if (!creep.memory.working && creep.carry.energy == creep.carryCapacity) {
-            creep.memory.working = true;
-            creep.say('work');
-        }
+        switch (creep.memory.workingType) {
+            case "harvest": {
+                var source = <Source>Game.getObjectById(creep.memory.source);
+                if (creep.harvest(source) == ERR_NOT_IN_RANGE) {
+                    creep.moveTo(source, { visualizePathStyle: { stroke: '#ffaa00' } });
+                }
+                if (creep.carry.energy == creep.carryCapacity) {
+                    roleHarvester.findwork(creep);
+                }
 
-        if (creep.memory.working) {
-            var targets = creep.room.find(FIND_STRUCTURES, {
-                filter: (structure) => {
-                    return (structure.structureType == STRUCTURE_EXTENSION || structure.structureType == STRUCTURE_SPAWN || structure.structureType == STRUCTURE_TOWER || structure.structureType == STRUCTURE_LAB) &&
-                        structure.energy < structure.energyCapacity;
+                break;
+            }
+            case "getdrop": {
+                var drop = <Resource>Game.getObjectById(creep.memory.target);
+                if (!drop){
+                    roleHarvester.findwork(creep);
+                    break;
                 }
-            });
-            if (targets.length > 0) {
-                if (creep.transfer(targets[0], RESOURCE_ENERGY) == ERR_NOT_IN_RANGE) {
-                    creep.moveTo(targets[0], { visualizePathStyle: { stroke: '#ffffff' } });
+                if (drop.amount == 0) {
+                    roleHarvester.findwork(creep);
+                    break;
                 }
-            } else {
-                var t = creep.pos.findInRange(FIND_STRUCTURES, 3, {
-                    filter: (structure : AnyStructure) => {
-                        return structure.hits < structure.hitsMax;
+                var resgetdrop = creep.pickup(drop);
+                switch (resgetdrop) {
+                    case ERR_NOT_IN_RANGE: {
+                        creep.moveTo(drop, { visualizePathStyle: { stroke: '#ffffff' } });
+                        break;
                     }
-                });
-                if (t.length > 0) {
-                    creep.repair(t[0]);
-                } else {
-                    var t2 = creep.room.find(FIND_CONSTRUCTION_SITES);
-                    if (t2.length > 0) {
-                        if (creep.build(t2[0]) == ERR_NOT_IN_RANGE) {
-                            creep.moveTo(t2[0], { visualizePathStyle: { stroke: '#ffffff' } });
+                    case OK: {
+                        if (creep.carry.energy < creep.carryCapacity)
+                            roleHarvester.findEnegy(creep);
+                        else
+                            roleHarvester.findwork(creep);
+                        break;
+                    }
+                    default: {
+                        console.log("getdrop wrong!")
+                        roleHarvester.findwork(creep);
+                        break;
+                    }
+                }
+                break;
+            }
+            case "transfer": {
+                var stru = <StructureSpawn>Game.getObjectById(creep.memory.target);
+                if (stru.energy == stru.energyCapacity) {
+                    roleHarvester.findwork(creep);
+                }
+                var res = creep.transfer(stru, RESOURCE_ENERGY);
+                switch (res) {
+                    case ERR_NOT_IN_RANGE: {
+                        creep.moveTo(stru, { visualizePathStyle: { stroke: '#ffffff' } });
+                        break;
+                    }
+                    case OK: {
+                        roleHarvester.findwork(creep);
+                        break;
+                    }
+                    default: {
+                        roleHarvester.findwork(creep);
+                        break;
+                    }
+                }
+                break;
+            }
+            case "build": {
+                var site = <ConstructionSite>Game.getObjectById(creep.memory.target);
+                var resbuild = creep.build(site);
+                switch (resbuild) {
+                    case ERR_NOT_ENOUGH_RESOURCES: {
+                        roleHarvester.findEnegy(creep);
+                        break;
+                    }
+                    case ERR_NOT_IN_RANGE: {
+                        creep.moveTo(site, { visualizePathStyle: { stroke: '#ffffff' } });
+                        break;
+                    }
+                    case OK: {
+                        break;
+                    }
+                    default: {
+                        console.log("build wrong!")
+                        roleHarvester.findwork(creep);
+                        break;
+                    }
+                }
+                break;
+            }
+            case "upgrade": {
+                if (creep.room.controller) {
+
+                    var resupgrade = creep.upgradeController(creep.room.controller);
+                    switch (resupgrade) {
+                        case ERR_NOT_ENOUGH_RESOURCES: {
+                            roleHarvester.findEnegy(creep);
+                            break;
                         }
-                    } else if (creep.room.controller) {
-                        if (creep.upgradeController(creep.room.controller) == ERR_NOT_IN_RANGE) {
+                        case ERR_NOT_IN_RANGE: {
                             creep.moveTo(creep.room.controller, { visualizePathStyle: { stroke: '#ffffff' } });
+                            break;
+                        }
+                        case OK: {
+                            break;
+                        }
+                        default: {
+                            console.log("unpgrade wrong!")
+                            roleHarvester.findwork(creep);
+                            break;
                         }
                     }
+                } else {
+                    console.log("upgrade wrong!")
+                    roleHarvester.findwork(creep);
                 }
+                break;
+            }
+            case "wait": {
+                roleHarvester.findwork(creep);
+                break;
             }
         }
-        else {
-            const drops = creep.room.find(FIND_DROPPED_RESOURCES);
-            var target = null;
-            if (drops.length > 0) {
-                for (let d of drops) {
-                    if (d.amount > creep.carryCapacity) {
-                        target = Game.getObjectById(d.id);
-                    }
-                }
-            }
-            if (target == null) {
-                var sources = creep.room.find(FIND_SOURCES);
-                if (creep.harvest(sources[creep.memory.source]) == ERR_NOT_IN_RANGE) {
-                    creep.moveTo(sources[creep.memory.source], { visualizePathStyle: { stroke: '#ffaa00' } });
-                }
-            } else {
-                var targets = creep.room.find(FIND_STRUCTURES, {
-                    filter: (structure) => {
-                        return (structure.structureType == STRUCTURE_CONTAINER) &&
-                            (structure.store.energy > creep.carryCapacity);
-                    }
-                });
-                if (targets.length > 0){
-                    if (creep.withdraw(targets[0],RESOURCE_ENERGY) == ERR_NOT_IN_RANGE) {
-                        creep.moveTo(targets[0], { visualizePathStyle: { stroke: '#ffaa00' } });
-                    }
-                } else if (creep.pickup(target) == ERR_NOT_IN_RANGE) {
-                    creep.moveTo(target, { visualizePathStyle: { stroke: '#ffaa00' } });
-                }
-            }
+    }
+    public static findwork(creep: Creep) {
+        if (creep.carry.energy == 0){
+            roleHarvester.findEnegy(creep);
+            return;
+        }
 
+        //transfer
+        var targetstructure = creep.pos.findClosestByPath(FIND_STRUCTURES, {
+            filter: (structure) => {
+                return (structure.structureType == STRUCTURE_EXTENSION || structure.structureType == STRUCTURE_SPAWN || structure.structureType == STRUCTURE_TOWER || structure.structureType == STRUCTURE_LAB) &&
+                    structure.energy < structure.energyCapacity;
+            }
+        });
+        if (targetstructure) {
+            creep.memory.target = targetstructure.id;
+            creep.memory.workingType = "transfer";
+            //roleHarvester.run(creep);
+            return;
         }
+
+        //build
+        var targetsite = creep.pos.findClosestByPath(FIND_CONSTRUCTION_SITES);
+        if (targetsite) {
+            creep.memory.target = targetsite.id;
+            creep.memory.workingType = "build";
+            //roleHarvester.run(creep);
+            return;
+        }
+
+        //upgrade
+        if (creep.room.controller){
+            creep.memory.target = creep.room.controller.id;
+            creep.memory.workingType = "upgrade";
+            //roleHarvester.run(creep);
+            return;
+        }
+
+        console.log(creep.name + "has nonthing to do!")
+    }
+    public static findEnegy(creep: Creep) {
+        if (creep.carry.energy == creep.carryCapacity){
+            roleHarvester.findwork(creep);
+            return;
+        }
+        const drops = creep.room.find(FIND_DROPPED_RESOURCES);
+        if (drops.length > 0){
+            var maxdrop = 0;
+            for (var i = 1; i < drops.length; i++){
+                if (drops[i].amount > drops[maxdrop].amount){
+                    maxdrop = i;
+                }
+            }
+            creep.memory.target = drops[maxdrop].id;
+            creep.memory.workingType = "getdrop";
+            //roleHarvester.run(creep);
+            return;
+        }
+        var t = <Source>Game.getObjectById(creep.memory.source);
+        creep.memory.target = t.id;
+        creep.memory.workingType = "harvest";
+        //roleHarvester.run(creep);
+        return;
     }
 }
