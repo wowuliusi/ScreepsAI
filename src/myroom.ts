@@ -1,8 +1,68 @@
 import { statusType } from "statusType";
 
 export class myroom {
+    fatherRoom: Room;
+    childRooms: Room[];
+    spawns: StructureSpawn[];
 
-    public static buildroad(room: Room) {
+    constructor(room: Room) {
+        this.fatherRoom = room;
+        this.childRooms = [];
+        this.spawns = [];
+        var spawns = room.find(FIND_STRUCTURES, {
+            filter: (structure) => {
+                return (structure.structureType == STRUCTURE_SPAWN)
+            }
+        });
+        for (var i = 0; i < spawns.length; i++){
+            this.spawns.push(<StructureSpawn>spawns[i])
+        }
+
+    }
+
+    public checkSourcer() {
+        var sourcers = _.filter(Game.creeps, (creep) => creep.memory.role == 'sourcer');
+        var sources = this.fatherRoom.find(FIND_SOURCES);
+        for (var i = 0; i < this.childRooms.length; i++) {
+            sources = sources.concat(this.childRooms[i].find(FIND_SOURCES));
+        }
+
+        for (var i = 0; i < sources.length; i++){
+            var NeedSourcer = true;
+            for (var j = 0; j < sourcers.length; j++){
+                if (sourcers[j].memory.target == sources[i].id) {
+                    var path = sourcers[j].pos.findPathTo(sources[i])
+                }
+            }
+        }
+
+        for (var i = 0; i < creeps.length; i++) {
+            var machine = new statusMachine(creeps[i].memory.role);
+            for (var j = 0; j < sources.length; j++) {
+                if (sources[j].id == creeps[i].memory.source) {
+                    sourcer[j]++;
+                    break;
+                }
+                if (creeps[i].memory.role == "repairer") {
+                    repairer++;
+                    break;
+                }
+            }
+            machine.execute(creeps[i]);
+        }
+
+        if (room.energyAvailable >= 550) {
+            for (var i = 0; i < sources.length; i++) {
+                if (sourcer[i] == 0) {
+                    myroom.createNewSourcer(room, sources[i].id);
+                    break;
+                }
+            }
+        }
+    }
+
+    public buildroad() {
+
         if (room.controller) {
             const sources = room.find(FIND_SOURCES);
             for (var i = 0; i < sources.length; i++) {
@@ -38,7 +98,7 @@ export class myroom {
         }
     }
 
-    public static buildextention(room: Room) {
+    public buildextention(room: Room) {
         if (room.controller) {
             const sources = room.find(FIND_SOURCES);
             const spawns = room.find(FIND_STRUCTURES, {
@@ -91,7 +151,7 @@ export class myroom {
         }
     }
 
-    public static buildcontainer(room: Room) {
+    public buildcontainer(room: Room) {
         const sources = room.find(FIND_SOURCES);
         const spawns = room.find(FIND_STRUCTURES, {
             filter: (structure) => {
@@ -105,7 +165,7 @@ export class myroom {
         }
     }
 
-    public static createharvester(room: Room) {
+    public createharvester(room: Room) {
         const harvestermodel = [[WORK, CARRY, MOVE, MOVE],
         [WORK, WORK, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE],
         [WORK, WORK, WORK, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
@@ -135,7 +195,7 @@ export class myroom {
         }
     }
 
-    public static createNewSourcer(room: Room, newsourcenum: string) {
+    public createNewSourcer(room: Room, newsourcenum: string) {
         const sourcermodel = [WORK, WORK, WORK, WORK, WORK, MOVE];
         const spawns = room.find(FIND_STRUCTURES, {
             filter: (structure) => {
@@ -147,12 +207,12 @@ export class myroom {
             if (!s.spawning) {
                 var newName = "Sourcer " + Game.time
                 s.spawnCreep(sourcermodel, newName,
-                    { memory: { role: 'sourcer', statusNow: statusType.wait, source: newsourcenum, target: "" } });
+                    { memory: { role: 'sourcer', statusNow: statusType.harvest, target: newsourcenum } });
             }
         }
     }
 
-    public static createRepairer(room: Room) {
+    public createRepairer(room: Room) {
         const repairermodel = [[WORK, CARRY, MOVE, MOVE],
         [WORK, WORK, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE],
         [WORK, WORK, WORK, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE]]
@@ -182,7 +242,7 @@ export class myroom {
         }
     }
 
-    public static createCarrier(room: Room) {
+    public createCarrier(room: Room) {
         const carriermodel = [[CARRY, CARRY, MOVE, MOVE, MOVE],
         [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
         [CARRY, CARRY, CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
@@ -210,7 +270,8 @@ export class myroom {
             }
         }
     }
-    public static createUpgrader(room: Room) {
+
+    public createUpgrader(room: Room) {
         const upgradermodel = [
             [WORK, WORK, WORK, WORK, WORK,
                 CARRY,
@@ -245,13 +306,13 @@ export class myroom {
         }
     }
 
-    public static buildstorage(room: Room) {
+    public buildstorage(room: Room) {
         const sources = room.find(FIND_SOURCES);
         if (room.controller) {
             const road = room.findPath(sources[0].pos, room.controller.pos, { ignoreCreeps: true, ignoreRoads: true, ignoreDestructibleStructures: true })
             var po = road.length - 3;
             room.createConstructionSite(road[po].x, road[po].y, STRUCTURE_STORAGE);
         }
-
     }
+
 }
