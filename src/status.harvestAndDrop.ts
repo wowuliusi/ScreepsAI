@@ -9,7 +9,7 @@ export class harvestAndDrop extends status {
 		creep.memory.statusNow = statusType.none;
 	}
 	execute(creep: Creep): string {
-		var source = <Source>Game.getObjectById(creep.memory.source);
+		var source = <Source>Game.getObjectById(creep.memory.target);
     	if (creep.harvest(source) == ERR_NOT_IN_RANGE) {
 			var container = source.pos.findClosestByPath(FIND_STRUCTURES, {
 				filter: (structure) => {

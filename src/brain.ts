@@ -31,7 +31,7 @@ export class brain {
             var room = Game.rooms[name];
             if (room.controller && room.controller.my) {
 
-                var _myroom  = new myroom(room);
+                var _myroom = new myroom(room);
                 //spawns echo
                 var spawns = room.find(FIND_STRUCTURES, {
                     filter: (structure) => {
@@ -49,25 +49,22 @@ export class brain {
                             { align: 'left', opacity: 0.8 });
                     }
                 }
+                if (Game.time % 10 == 0)
+                    _myroom.checkSourcer();
+                if (Game.time % 50 == 0){
+                    if (!_myroom.checkExtension())
+                        if (_myroom.checkRoad())
+                            if (_myroom.checkContainer())
+                                _myroom.checkStorage;
+                }
 
-                _myroom.checkSourcer();
 
-                let sourcer = [0, 0]
                 var creeps = room.find(FIND_MY_CREEPS)
-                var sources = room.find(FIND_SOURCES)
                 var repairer = 0;
-
-
 
                 if (Game.time % 50 == 0) {
                     var con = Game.spawns["Spawn1"].room.controller;
                     if (con) {
-                        if (con.level > 1) {
-                            myroom.buildroad(room);
-                            myroom.buildcontainer(room);
-                            myroom.buildstorage(room);
-                            myroom.buildextention(room)
-                        }
                         if (con.level < 3) {
                             if (creeps.length < 14) {
                                 myroom.createharvester(room);

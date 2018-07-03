@@ -1,5 +1,20 @@
 import { statusType } from "statusType";
 
+export class Creeptask implements ICreeptask {
+    model: BodyPartConstant[];
+    role: string;
+    status: string;
+    target: string;
+
+    constructor(model: BodyPartConstant[], role: string, status: string, target: string) {
+        this.model = model;
+        this.role = role;
+        this.status = status;
+        this.target = target;
+
+    }
+}
+
 export class myroom {
     fatherRoom: Room;
     childRooms: Room[];
@@ -14,10 +29,13 @@ export class myroom {
                 return (structure.structureType == STRUCTURE_SPAWN)
             }
         });
-        for (var i = 0; i < spawns.length; i++){
+        for (var i = 0; i < spawns.length; i++) {
             this.spawns.push(<StructureSpawn>spawns[i])
         }
-
+        for (var i = 0; i < room.memory.childrooms.length; i++) {
+            var r = Game.rooms[room.memory.childrooms[i]];
+            this.childRooms.push(r);
+        }
     }
 
     public checkSourcer() {
@@ -27,79 +45,167 @@ export class myroom {
             sources = sources.concat(this.childRooms[i].find(FIND_SOURCES));
         }
 
-        for (var i = 0; i < sources.length; i++){
+        for (var i = 0; i < sources.length; i++) {
             var NeedSourcer = true;
-            for (var j = 0; j < sourcers.length; j++){
+            for (var j = 0; j < sourcers.length; j++) {
                 if (sourcers[j].memory.target == sources[i].id) {
-                    var path = sourcers[j].pos.findPathTo(sources[i])
-                }
-            }
-        }
-
-        for (var i = 0; i < creeps.length; i++) {
-            var machine = new statusMachine(creeps[i].memory.role);
-            for (var j = 0; j < sources.length; j++) {
-                if (sources[j].id == creeps[i].memory.source) {
-                    sourcer[j]++;
-                    break;
-                }
-                if (creeps[i].memory.role == "repairer") {
-                    repairer++;
-                    break;
-                }
-            }
-            machine.execute(creeps[i]);
-        }
-
-        if (room.energyAvailable >= 550) {
-            for (var i = 0; i < sources.length; i++) {
-                if (sourcer[i] == 0) {
-                    myroom.createNewSourcer(room, sources[i].id);
-                    break;
-                }
-            }
-        }
-    }
-
-    public buildroad() {
-
-        if (room.controller) {
-            const sources = room.find(FIND_SOURCES);
-            for (var i = 0; i < sources.length; i++) {
-                const road1 = room.findPath(sources[i].pos, room.controller.pos, { ignoreCreeps: true, ignoreRoads: true, ignoreDestructibleStructures: true })
-                for (var r = 0; r < road1.length; r++) {
-                    room.createConstructionSite(road1[r].x, road1[r].y, STRUCTURE_ROAD);
-                }
-                for (var xp = -1; xp < 2; xp++) {
-                    for (var yp = -1; yp < 2; yp++) {
-                        room.createConstructionSite(sources[i].pos.x + xp, sources[i].pos.y + yp, STRUCTURE_ROAD);
+                    var minDis = 99999;
+                    var minNum = -1;
+                    for (var k = 0; k < this.spawns.length; k++) {
+                        const path = this.fatherRoom.findPath(this.spawns[k].pos, sources[i].pos, { ignoreCreeps: true });
+                        if (path.length < minDis) {
+                            minNum = k;
+                            minDis = path.length
+                        }
                     }
-                }
-
-                const spawns = room.find(FIND_STRUCTURES, {
-                    filter: (structure) => {
-                        return (structure.structureType == STRUCTURE_SPAWN);
-                    }
-                });
-                for (var j = 0; j < spawns.length; j++) {
-                    const road2 = room.findPath(spawns[j].pos, sources[i].pos, { ignoreCreeps: true, ignoreRoads: true, ignoreDestructibleStructures: true })
-                    for (var r = 0; r < road2.length; r++) {
-                        room.createConstructionSite(road2[r].x, road2[r].y, STRUCTURE_ROAD);
-                    }
-                    for (var xp = -1; xp < 2; xp++) {
-                        for (var yp = -1; yp < 2; yp++) {
-                            room.createConstructionSite(spawns[j].pos.x + xp, spawns[j].pos.y + yp, STRUCTURE_ROAD);
+                    if (minNum == -1) {
+                        console.log("Can't find any spawn!!!!!!!!!!!")
+                    } else {
+                        var time = sourcers[j].ticksToLive;
+                        if (time && time < minDis) {
+                            var alreadyExist = false;
+                            for (var s = 0; s < this.spawns[minNum].memory.queue.length; s++) {
+                                if (this.spawns[minNum].memory.queue[s].target == sources[i].id) {
+                                    alreadyExist = true;
+                                    break;
+                                }
+                            }
+                            if (!alreadyExist)
+                                this.createNewSourcer(this.spawns[minNum], sources[i].id)
+                            break;
+                        } else {
+                            NeedSourcer = false;
                         }
                     }
                 }
+            }
+            if (NeedSourcer) {
+                var minDis = 99999;
+                var minNum = -1;
+                for (var k = 0; k < this.spawns.length; k++) {
+                    const path = this.fatherRoom.findPath(this.spawns[k].pos, sources[i].pos, { ignoreCreeps: true });
+                    if (path.length < minDis) {
+                        minNum = k;
+                        minDis = path.length;
+                    }
+                }
+                if (minNum == -1)
+                    console.log("Can't find any spawn!!!!!!!!!!!")
+                else {
+                    var alreadyExist = false;
+                    for (var s = 0; s < this.spawns[minNum].memory.queue.length; s++) {
+                        if (this.spawns[minNum].memory.queue[s].target == sources[i].id) {
+                            alreadyExist = true;
+                            break;
+                        }
+                    }
+                    if (!alreadyExist)
+                        this.createNewSourcer(this.spawns[minNum], sources[i].id)
+                }
 
             }
-
         }
     }
 
-    public buildextention(room: Room) {
+    public checkRoad(): boolean {
+        if (this.roadBetweenControllerAndSources(this.fatherRoom))
+            return true;
+        if (this.roadBetweenSpawnsAndSources(this.fatherRoom))
+            return true;
+        for (var i = 0; i < this.childRooms.length; i++) {
+            if (this.roadBetweenControllerAndSources(this.childRooms[i]))
+                return true;
+            if (this.roadBetweenSpawnsAndSources(this.childRooms[i]))
+                return true;
+        }
+        return false;
+    }
+
+    public roadBetweenControllerAndSources(room: Room): boolean {
+        if (!room.controller)
+            return false;
+        var builded = false;
+        const sources = room.find(FIND_SOURCES);
+        for (var i = 0; i < sources.length; i++) {
+            const road = room.findPath(sources[i].pos, room.controller.pos, { ignoreCreeps: true })
+            for (var r = 0; r < road.length; r++) {
+                if (room.createConstructionSite(road[r].x, road[r].y, STRUCTURE_ROAD))
+                    builded = true;
+            }
+            if (builded)
+                break;
+        }
+        return builded;
+    }
+
+    public roadBetweenSpawnsAndSources(room: Room): boolean {
+        var spawns = room.find(FIND_STRUCTURES, {
+            filter: (structure) => {
+                return (structure.structureType == STRUCTURE_SPAWN)
+            }
+        });
+        if (spawns.length == 0)
+            return false;
+        var builded = false;
+        const sources = room.find(FIND_SOURCES);
+        for (var i = 0; i < sources.length; i++) {
+            for (var j = 0; j < spawns.length; j++) {
+                const road = room.findPath(sources[i].pos, spawns[j].pos, { ignoreCreeps: true })
+                for (var r = 0; r < road.length; r++) {
+                    if (room.createConstructionSite(road[r].x, road[r].y, STRUCTURE_ROAD))
+                        builded = true;
+                }
+                if (builded)
+                    break;
+            }
+            if (builded)
+                break;
+        }
+        return builded;
+    }
+
+    public checkExtension(): boolean {
+        if (this.fatherRoom.controller) {
+            const extensions = this.fatherRoom.find(FIND_STRUCTURES, {
+                filter: (structure) => {
+                    return (structure.structureType == STRUCTURE_EXTENSION);
+                }
+            });
+            if (extensions.length < this.extensionLimit(this.fatherRoom.controller.level)) {
+                if (this.buildextention(this.fatherRoom))
+                    return true;
+                else
+                    console.log("Can't find extension position!!!!!!!");
+            }
+            for (var i = 0; i < this.childRooms.length; i++) {
+                const extensions2 = this.childRooms[i].find(FIND_STRUCTURES, {
+                    filter: (structure) => {
+                        return (structure.structureType == STRUCTURE_EXTENSION);
+                    }
+                });
+                if (extensions2.length < this.extensionLimit(this.fatherRoom.controller.level)) {
+                    if (this.buildextention(this.fatherRoom))
+                        return true;
+                    else
+                        console.log("Can't find extension position!!!!!!!");
+                }
+            }
+        }
+        return false;
+    }
+
+    public extensionLimit(controllerlvl: number): number {
+        switch (controllerlvl) {
+            case 1:
+                return 5;
+            default:
+                return (controllerlvl - 2) * 10
+        }
+    }
+
+    public buildextention(room: Room): boolean {
         if (room.controller) {
+            var builded = false;
             const sources = room.find(FIND_SOURCES);
             const spawns = room.find(FIND_STRUCTURES, {
                 filter: (structure) => {
@@ -121,8 +227,12 @@ export class myroom {
                                             break;
                                         }
                                     }
-                                    if (Canbuild)
-                                        room.createConstructionSite(road[r].x + xp, road[r].y + yp, STRUCTURE_EXTENSION);
+                                    if (Canbuild) {
+                                        if (room.createConstructionSite(road[r].x + xp, road[r].y + yp, STRUCTURE_EXTENSION)) {
+                                            builded = true;
+                                        }
+                                    }
+
                                 }
                             }
                         }
@@ -141,28 +251,78 @@ export class myroom {
                                         break;
                                     }
                                 }
-                                if (Canbuild)
-                                    room.createConstructionSite(road[r].x + xp, road[r].y + yp, STRUCTURE_EXTENSION);
+                                if (Canbuild) {
+                                    if (room.createConstructionSite(road[r].x + xp, road[r].y + yp, STRUCTURE_EXTENSION)) {
+                                        builded = true;
+                                    }
+                                }
+
                             }
                         }
                     }
                 }
             }
+            return builded;
         }
+        return false;
     }
 
-    public buildcontainer(room: Room) {
-        const sources = room.find(FIND_SOURCES);
-        const spawns = room.find(FIND_STRUCTURES, {
-            filter: (structure) => {
-                return (structure.structureType == STRUCTURE_SPAWN);
-            }
-        });
-        for (var i = 0; i < sources.length; i++) {
-            const road = room.findPath(spawns[0].pos, sources[i].pos, { ignoreCreeps: true, ignoreRoads: true, ignoreDestructibleStructures: true })
-            var len = road.length;
-            room.createConstructionSite(road[len - 2].x, road[len - 2].y, STRUCTURE_CONTAINER);
+    public checkContainer() {
+        if (this.buildcontainer(this.fatherRoom))
+            return true;
+        for (var i = 0; i < this.childRooms.length; i++) {
+            if (this.buildcontainer(this.childRooms[i]))
+                return true;
         }
+        return false;
+    }
+
+    public buildcontainer(room: Room): boolean {
+        if (!room.controller)
+            return false;
+        var builded = false;
+        const sources = room.find(FIND_SOURCES);
+        for (var i = 0; i < sources.length; i++) {
+            var con = sources[i].pos.findInRange(FIND_STRUCTURES, 1, {
+                filter: (structure: Structure) => {
+                    return structure.structureType == STRUCTURE_CONTAINER;
+                }
+            });
+            if (con.length > 0)
+                continue
+            const road = room.findPath(sources[i].pos, room.controller.pos, { ignoreCreeps: true })
+            var len = road.length;
+            if (room.createConstructionSite(road[0].x, road[0].y, STRUCTURE_CONTAINER)) {
+                builded = true;
+            }
+        }
+        return false;
+    }
+
+    public checkStorage(): boolean {
+        if (this.fatherRoom.controller && this.fatherRoom.controller.level > 3) {
+            if (this.buildcontainer(this.fatherRoom))
+                return true;
+        }
+
+        for (var i = 0; i < this.childRooms.length; i++) {
+            var lvl = this.childRooms[i].controller;
+            if (lvl && lvl.level > 3) {
+                if (this.buildcontainer(this.childRooms[i]))
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    public buildstorage(room: Room): boolean {
+        const sources = room.find(FIND_SOURCES);
+        if (room.controller) {
+            const road = room.findPath(room.controller.pos, sources[0].pos, { ignoreCreeps: true })
+            if (room.createConstructionSite(road[2].x, road[2].y, STRUCTURE_STORAGE))
+                return true;
+        }
+        return false;
     }
 
     public createharvester(room: Room) {
@@ -195,19 +355,17 @@ export class myroom {
         }
     }
 
-    public createNewSourcer(room: Room, newsourcenum: string) {
-        const sourcermodel = [WORK, WORK, WORK, WORK, WORK, MOVE];
-        const spawns = room.find(FIND_STRUCTURES, {
-            filter: (structure) => {
-                return (structure.structureType == STRUCTURE_SPAWN);
-            }
-        });
-        for (var j = 0; j < spawns.length; j++) {
-            var s = <StructureSpawn>spawns[j]
-            if (!s.spawning) {
-                var newName = "Sourcer " + Game.time
-                s.spawnCreep(sourcermodel, newName,
-                    { memory: { role: 'sourcer', statusNow: statusType.harvest, target: newsourcenum } });
+    public createNewSourcer(spawn: StructureSpawn, targetSource: string) {
+        const sourcermodel1 = [WORK, WORK, WORK, WORK, WORK, MOVE];
+        const sourcermodel2 = [WORK, WORK, WORK, WORK, WORK, MOVE, MOVE, MOVE];
+        var source = <Source>Game.getObjectById(targetSource);
+        if (spawn.room.energyCapacityAvailable >= 650) {
+            var task = new Creeptask(sourcermodel2, "sourcer", statusType.harvest, targetSource);
+            spawn.memory.queue.push(task);
+        } else {
+            if (spawn.room.name == source.room.name && spawn.room.energyCapacityAvailable >= 550) {
+                var task = new Creeptask(sourcermodel1, "sourcer", statusType.harvest, targetSource);
+                spawn.memory.queue.push(task);
             }
         }
     }
@@ -306,13 +464,5 @@ export class myroom {
         }
     }
 
-    public buildstorage(room: Room) {
-        const sources = room.find(FIND_SOURCES);
-        if (room.controller) {
-            const road = room.findPath(sources[0].pos, room.controller.pos, { ignoreCreeps: true, ignoreRoads: true, ignoreDestructibleStructures: true })
-            var po = road.length - 3;
-            room.createConstructionSite(road[po].x, road[po].y, STRUCTURE_STORAGE);
-        }
-    }
 
 }
