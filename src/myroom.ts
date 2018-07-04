@@ -345,7 +345,7 @@ export class myroom {
                     if (!s.spawning) {
                         var newName = "Lv." + i + " harvester " + Game.time
                         s.spawnCreep(harvestermodel[i], newName,
-                            { memory: { role: 'harvester', statusNow: statusType.wait, source: "", target: "" } });
+                            { memory: { role: 'harvester', statusNow: statusType.wait, target: "" } });
                         console.log("create " + newName)
                         break;
                     }
