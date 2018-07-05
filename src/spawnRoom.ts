@@ -1,28 +1,12 @@
 import { statusType } from "statusType";
+import { Creeptask } from "creeptask";
 
-export class Creeptask implements ICreeptask {
-    model: BodyPartConstant[];
-    role: string;
-    status: string;
-    target: string;
-
-    constructor(model: BodyPartConstant[], role: string, status: string, target: string) {
-        this.model = model;
-        this.role = role;
-        this.status = status;
-        this.target = target;
-
-    }
-}
-
-export class myroom {
-    fatherRoom: Room;
-    childRooms: Room[];
+export class SpawnRoom {
+    room: Room;
     spawns: StructureSpawn[];
 
     constructor(room: Room) {
-        this.fatherRoom = room;
-        this.childRooms = [];
+        this.room = room;
         this.spawns = [];
         var spawns = room.find(FIND_STRUCTURES, {
             filter: (structure) => {
@@ -32,92 +16,105 @@ export class myroom {
         for (var i = 0; i < spawns.length; i++) {
             this.spawns.push(<StructureSpawn>spawns[i])
         }
-        for (var i = 0; i < room.memory.childrooms.length; i++) {
-            var r = Game.rooms[room.memory.childrooms[i]];
-            this.childRooms.push(r);
-        }
     }
 
     public checkSourcer() {
-        var sourcers = _.filter(Game.creeps, (creep) => creep.memory.role == 'sourcer');
-        var sources = this.fatherRoom.find(FIND_SOURCES);
-        for (var i = 0; i < this.childRooms.length; i++) {
-            sources = sources.concat(this.childRooms[i].find(FIND_SOURCES));
-        }
-
+        if (this.room.energyAvailable < 550)
+            return;
+        var sources = this.room.find(FIND_SOURCES);
         for (var i = 0; i < sources.length; i++) {
             var NeedSourcer = true;
-            for (var j = 0; j < sourcers.length; j++) {
-                if (sourcers[j].memory.target == sources[i].id) {
-                    var minDis = 99999;
-                    var minNum = -1;
-                    for (var k = 0; k < this.spawns.length; k++) {
-                        const path = this.fatherRoom.findPath(this.spawns[k].pos, sources[i].pos, { ignoreCreeps: true });
-                        if (path.length < minDis) {
-                            minNum = k;
-                            minDis = path.length
-                        }
-                    }
-                    if (minNum == -1) {
-                        console.log("Can't find any spawn!!!!!!!!!!!")
+            var sourcers = _.filter(Game.creeps, (creep) => (creep.memory.role == 'sourcer') && (creep.memory.target == sources[i].id));
+            const spawn = <StructureSpawn>sources[i].pos.findClosestByPath(FIND_STRUCTURES, {
+                filter: (structure) => {
+                    return (structure.structureType == STRUCTURE_SPAWN)
+                }
+            });
+            if (!spawn) {
+                console.log("ERR: Can't find any spawn!!!!!!!!!!!")
+                return;
+            }
+            switch (sourcers.length) {
+                case 0:
+                    NeedSourcer = true;
+                    break;
+                case 1:
+                    const path = this.room.findPath(spawn.pos, sources[i].pos, { ignoreCreeps: true });
+                    var time = sourcers[0].ticksToLive;
+                    if (time && time < path.length + 12) {
+                        NeedSourcer = true;
                     } else {
-                        var time = sourcers[j].ticksToLive;
-                        if (time && time < minDis) {
-                            var alreadyExist = false;
-                            for (var s = 0; s < this.spawns[minNum].memory.queue.length; s++) {
-                                if (this.spawns[minNum].memory.queue[s].target == sources[i].id) {
-                                    alreadyExist = true;
-                                    break;
-                                }
-                            }
-                            if (!alreadyExist)
-                                this.createNewSourcer(this.spawns[minNum], sources[i].id)
-                            break;
-                        } else {
-                            NeedSourcer = false;
-                        }
+                        NeedSourcer = false;
                     }
+                    break;
+                case 2:
+                    NeedSourcer = false;
+                    continue;
+                default:
+                    break;
+            }
+            if (!NeedSourcer)
+                continue;
+            var alreadyExist = false;
+            for (var s = 0; s < spawn.memory.queue.length; s++) {
+                if (spawn.memory.queue[s].target == sources[i].id) {
+                    alreadyExist = true;
+                    break;
                 }
             }
-            if (NeedSourcer) {
-                var minDis = 99999;
-                var minNum = -1;
-                for (var k = 0; k < this.spawns.length; k++) {
-                    const path = this.fatherRoom.findPath(this.spawns[k].pos, sources[i].pos, { ignoreCreeps: true });
-                    if (path.length < minDis) {
-                        minNum = k;
-                        minDis = path.length;
-                    }
-                }
-                if (minNum == -1)
-                    console.log("Can't find any spawn!!!!!!!!!!!")
-                else {
-                    var alreadyExist = false;
-                    for (var s = 0; s < this.spawns[minNum].memory.queue.length; s++) {
-                        if (this.spawns[minNum].memory.queue[s].target == sources[i].id) {
-                            alreadyExist = true;
-                            break;
-                        }
-                    }
-                    if (!alreadyExist)
-                        this.createNewSourcer(this.spawns[minNum], sources[i].id)
-                }
+            if (!alreadyExist)
+                this.createSourcer(spawn, sources[i].id)
+        }
+    }
 
+    public checkHarvester() {
+        if (!this.room.controller)
+            return;
+        const creeps = this.room.find(FIND_CREEPS);
+        if (this.room.controller.level < 3) {
+            if (creeps.length + this.spawns[0].memory.queue.length < 14) {
+                this.createharvester(this.spawns[0]);
+            }
+        } else {
+            var site = this.room.find(FIND_CONSTRUCTION_SITES);
+            if (site.length > 0 && creeps.length + this.spawns[0].memory.queue.length < 2) {
+                this.createharvester(this.spawns[0]);
             }
         }
     }
 
-    public checkRoad(): boolean {
-        if (this.roadBetweenControllerAndSources(this.fatherRoom))
-            return true;
-        if (this.roadBetweenSpawnsAndSources(this.fatherRoom))
-            return true;
-        for (var i = 0; i < this.childRooms.length; i++) {
-            if (this.roadBetweenControllerAndSources(this.childRooms[i]))
-                return true;
-            if (this.roadBetweenSpawnsAndSources(this.childRooms[i]))
-                return true;
+    public nonstoreEnergy(): number {
+        var nonstoreEnergy = 0;
+        const dropped = this.room.find(FIND_DROPPED_RESOURCES)
+        for (var i = 0; i < dropped.length; i++) {
+            nonstoreEnergy += dropped[i].amount;
         }
+        const containers = this.room.find(FIND_STRUCTURES, {
+            filter: (structure) => {
+                return (structure.structureType == STRUCTURE_CONTAINER)
+            }
+        });
+        for (var i = 0; i < containers.length; i++) {
+            const container = <StructureContainer>containers[i]
+            nonstoreEnergy += container.store.energy;
+        }
+        return nonstoreEnergy;
+    }
+
+    public storeEnergy(): number {
+        const storage = this.room.find(FIND_STRUCTURES, {
+            filter: (structure) => {
+                return (structure.structureType == STRUCTURE_STORAGE)
+            }
+        });
+        return (<StructureContainer>storage[0]).store.energy;
+    }
+
+    public checkRoad(): boolean {
+        if (this.roadBetweenControllerAndSources(this.room))
+            return true;
+        if (this.roadBetweenSpawnsAndSources(this.room))
+            return true;
         return false;
     }
 
@@ -165,30 +162,17 @@ export class myroom {
     }
 
     public checkExtension(): boolean {
-        if (this.fatherRoom.controller) {
-            const extensions = this.fatherRoom.find(FIND_STRUCTURES, {
+        if (this.room.controller) {
+            const extensions = this.room.find(FIND_STRUCTURES, {
                 filter: (structure) => {
                     return (structure.structureType == STRUCTURE_EXTENSION);
                 }
             });
-            if (extensions.length < this.extensionLimit(this.fatherRoom.controller.level)) {
-                if (this.buildextention(this.fatherRoom))
+            if (extensions.length < this.extensionLimit(this.room.controller.level)) {
+                if (this.buildextention(this.room))
                     return true;
                 else
                     console.log("Can't find extension position!!!!!!!");
-            }
-            for (var i = 0; i < this.childRooms.length; i++) {
-                const extensions2 = this.childRooms[i].find(FIND_STRUCTURES, {
-                    filter: (structure) => {
-                        return (structure.structureType == STRUCTURE_EXTENSION);
-                    }
-                });
-                if (extensions2.length < this.extensionLimit(this.fatherRoom.controller.level)) {
-                    if (this.buildextention(this.fatherRoom))
-                        return true;
-                    else
-                        console.log("Can't find extension position!!!!!!!");
-                }
             }
         }
         return false;
@@ -268,12 +252,8 @@ export class myroom {
     }
 
     public checkContainer() {
-        if (this.buildcontainer(this.fatherRoom))
+        if (this.buildcontainer(this.room))
             return true;
-        for (var i = 0; i < this.childRooms.length; i++) {
-            if (this.buildcontainer(this.childRooms[i]))
-                return true;
-        }
         return false;
     }
 
@@ -300,17 +280,9 @@ export class myroom {
     }
 
     public checkStorage(): boolean {
-        if (this.fatherRoom.controller && this.fatherRoom.controller.level > 3) {
-            if (this.buildcontainer(this.fatherRoom))
+        if (this.room.controller && this.room.controller.level > 3) {
+            if (this.buildcontainer(this.room))
                 return true;
-        }
-
-        for (var i = 0; i < this.childRooms.length; i++) {
-            var lvl = this.childRooms[i].controller;
-            if (lvl && lvl.level > 3) {
-                if (this.buildcontainer(this.childRooms[i]))
-                    return true;
-            }
         }
         return false;
     }
@@ -325,39 +297,40 @@ export class myroom {
         return false;
     }
 
-    public createharvester(room: Room) {
+    public createharvester(spawn: StructureSpawn) {
         const harvestermodel = [[WORK, CARRY, MOVE, MOVE],
         [WORK, WORK, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE],
-        [WORK, WORK, WORK, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
-        [WORK, WORK, WORK, WORK, WORK, CARRY, CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE]];
-        const harvestercost = [250, 500, 750, 1250];
+        [WORK, WORK, WORK, WORK, CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE],
+        [WORK, WORK, WORK, WORK, WORK, WORK, CARRY, CARRY, CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
+        [WORK, WORK, WORK, WORK, WORK, WORK, WORK, WORK, WORK, CARRY, CARRY, CARRY, CARRY, CARRY, CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE]];
+        const harvestercost = [250, 500, 800, 1200, 1800];
 
         for (var i = harvestercost.length - 1; i >= 0; i--) {
-            if (room.energyAvailable >= harvestercost[i]) {
-
-                const spawns = room.find(FIND_STRUCTURES, {
-                    filter: (structure) => {
-                        return (structure.structureType == STRUCTURE_SPAWN);
-                    }
-                });
-                for (var j = 0; j < spawns.length; j++) {
-                    var s = <StructureSpawn>spawns[j]
-                    if (!s.spawning) {
-                        var newName = "Lv." + i + " harvester " + Game.time
-                        s.spawnCreep(harvestermodel[i], newName,
-                            { memory: { role: 'harvester', statusNow: statusType.wait, target: "" } });
-                        console.log("create " + newName)
-                        break;
+            if (this.room.energyCapacityAvailable >= harvestercost[i]) {
+                var minspawn = -1;
+                var mintasks = 9999;
+                for (var j = 0; j < this.spawns.length; j++) {
+                    var s = this.spawns[j]
+                    if (s.memory.queue.length < mintasks) {
+                        minspawn = j;
+                        mintasks = s.memory.queue.length;
                     }
                 }
+                if (minspawn == -1) {
+                    console.log("ERR: Create Harvest Can't find spawn!!!!")
+                    return;
+                }
+                var task = new Creeptask(harvestermodel[i], "harvester", statusType.wait, "");
+                spawn.memory.queue.push(task);
                 break;
             }
         }
     }
 
-    public createNewSourcer(spawn: StructureSpawn, targetSource: string) {
+    public createSourcer(spawn: StructureSpawn, targetSource: string) {
         const sourcermodel1 = [WORK, WORK, WORK, WORK, WORK, MOVE];
         const sourcermodel2 = [WORK, WORK, WORK, WORK, WORK, MOVE, MOVE, MOVE];
+        const sourcermodel3 = [WORK, WORK, WORK, MOVE, MOVE, MOVE];
         var source = <Source>Game.getObjectById(targetSource);
         if (spawn.room.energyCapacityAvailable >= 650) {
             var task = new Creeptask(sourcermodel2, "sourcer", statusType.harvest, targetSource);
@@ -370,37 +343,35 @@ export class myroom {
         }
     }
 
-    public createRepairer(room: Room) {
+    public createRepairer(spawn: StructureSpawn) {
         const repairermodel = [[WORK, CARRY, MOVE, MOVE],
         [WORK, WORK, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE],
         [WORK, WORK, WORK, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE]]
         const repairercost = [250, 500, 750];
 
         for (var i = repairercost.length - 1; i >= 0; i--) {
-            if (room.energyAvailable >= repairercost[i]) {
-
-                const spawns = room.find(FIND_STRUCTURES, {
-                    filter: (structure) => {
-                        return (structure.structureType == STRUCTURE_SPAWN);
-                    }
-                });
-                for (var j = 0; j < spawns.length; j++) {
-                    var s = <StructureSpawn>spawns[j]
-
-                    if (!s.spawning) {
-                        var newName = "Lv." + i + " repairer !!!!!!!" + Game.time
-                        s.spawnCreep(repairermodel[i], newName,
-                            { memory: { role: 'repairer', statusNow: statusType.wait, source: "", target: "" } });
-                        console.log("create " + newName);
-                        break;
+            if (this.room.energyAvailable >= repairercost[i]) {
+                var minspawn = -1;
+                var mintasks = 9999;
+                for (var j = 0; j < this.spawns.length; j++) {
+                    var s = this.spawns[j]
+                    if (s.memory.queue.length < mintasks) {
+                        minspawn = j;
+                        mintasks = s.memory.queue.length;
                     }
                 }
+                if (minspawn == -1) {
+                    console.log("ERR: Create repairer Can't find spawn!!!!")
+                    return;
+                }
+                var task = new Creeptask(repairermodel[i], "repairer", statusType.wait, "");
+                spawn.memory.queue.push(task);
                 break;
             }
         }
     }
 
-    public createCarrier(room: Room) {
+    public createCarrier(spawn: StructureSpawn) {
         const carriermodel = [[CARRY, CARRY, MOVE, MOVE, MOVE],
         [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
         [CARRY, CARRY, CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE],
@@ -408,28 +379,28 @@ export class myroom {
         const carriercost = [250, 500, 750, 1250];
 
         for (var i = carriercost.length - 1; i >= 0; i--) {
-            if (room.energyAvailable >= carriercost[i]) {
-
-                const spawns = room.find(FIND_STRUCTURES, {
-                    filter: (structure) => {
-                        return (structure.structureType == STRUCTURE_SPAWN);
-                    }
-                });
-                for (var j = 0; j < spawns.length; j++) {
-                    var s = <StructureSpawn>spawns[j]
-                    if (!s.spawning) {
-                        var newName = "Lv." + i + " carrier " + Game.time
-                        s.spawnCreep(carriermodel[i], newName,
-                            { memory: { role: 'carrier', statusNow: statusType.wait, source: "", target: "" } });
-                        console.log("create " + newName)
+            if (this.room.energyAvailable >= carriercost[i]) {
+                var minspawn = -1;
+                var mintasks = 9999;
+                for (var j = 0; j < this.spawns.length; j++) {
+                    var s = this.spawns[j]
+                    if (s.memory.queue.length < mintasks) {
+                        minspawn = j;
+                        mintasks = s.memory.queue.length;
                     }
                 }
+                if (minspawn == -1) {
+                    console.log("ERR: Create repairer Can't find spawn!!!!")
+                    return;
+                }
+                var task = new Creeptask(carriermodel[i], "carrier", statusType.wait, "");
+                spawn.memory.queue.push(task);
                 break;
             }
         }
     }
 
-    public createUpgrader(room: Room) {
+    public createUpgrader(spawn: StructureSpawn) {
         const upgradermodel = [
             [WORK, WORK, WORK, WORK, WORK,
                 CARRY,
@@ -443,22 +414,22 @@ export class myroom {
         const upgradercost = [650, 1250, 2450];
 
         for (var i = upgradercost.length - 1; i >= 0; i--) {
-            if (room.energyAvailable >= upgradercost[i]) {
-
-                const spawns = room.find(FIND_STRUCTURES, {
-                    filter: (structure) => {
-                        return (structure.structureType == STRUCTURE_SPAWN);
-                    }
-                });
-                for (var j = 0; j < spawns.length; j++) {
-                    var s = <StructureSpawn>spawns[j]
-                    if (!s.spawning) {
-                        var newName = "Lv." + i + " upgrader " + Game.time
-                        s.spawnCreep(upgradermodel[i], newName,
-                            { memory: { role: 'upgrader', statusNow: statusType.wait, source: "", target: "" } });
-                        console.log("create " + newName)
+            if (this.room.energyAvailable >= upgradercost[i]) {
+                var minspawn = -1;
+                var mintasks = 9999;
+                for (var j = 0; j < this.spawns.length; j++) {
+                    var s = this.spawns[j]
+                    if (s.memory.queue.length < mintasks) {
+                        minspawn = j;
+                        mintasks = s.memory.queue.length;
                     }
                 }
+                if (minspawn == -1) {
+                    console.log("ERR: Create repairer Can't find spawn!!!!")
+                    return;
+                }
+                var task = new Creeptask(upgradermodel[i], "upgrader", statusType.wait, "");
+                spawn.memory.queue.push(task);
                 break;
             }
         }

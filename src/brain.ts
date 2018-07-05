@@ -1,5 +1,5 @@
 
-import { myroom } from "myroom";
+import { SpawnRoom } from "spawnRoom";
 import { statusMachine } from "statusMachine";
 
 export class brain {
@@ -30,8 +30,7 @@ export class brain {
         for (var name in Game.rooms) {
             var room = Game.rooms[name];
             if (room.controller && room.controller.my) {
-
-                var _myroom = new myroom(room);
+                var _myroom = new SpawnRoom(room);
                 //spawns echo
                 var spawns = room.find(FIND_STRUCTURES, {
                     filter: (structure) => {
@@ -59,8 +58,12 @@ export class brain {
                 }
 
 
-                var creeps = room.find(FIND_MY_CREEPS)
-                var repairer = 0;
+                if (Game.time % 5 == 0)
+                    _myroom.checkSourcer();
+
+                if (Game.time % 5 == 1)
+                    _myroom.checkHarvester();
+
 
                 if (Game.time % 50 == 0) {
                     var con = Game.spawns["Spawn1"].room.controller;
