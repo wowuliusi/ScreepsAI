@@ -13,7 +13,6 @@ export class repair extends status {
             }
         });
         if (Needrepair){
-
             var res = creep.repair(Needrepair);
             switch (res) {
                 case ERR_NOT_ENOUGH_RESOURCES:

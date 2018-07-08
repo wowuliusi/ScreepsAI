@@ -18,8 +18,24 @@ export class SpawnRoom {
         }
     }
 
+    public findspawn(): StructureSpawn {
+        var minnum = -1;
+        var mintask = 9999;
+        for (var i = 0; i < this.spawns.length; i++) {
+            if (this.spawns[i].memory.queue.length < mintask) {
+                minnum = i;
+                mintask = this.spawns[i].memory.queue.length;
+            }
+        }
+        if (minnum == -1) {
+            console.log("Can't find spawn to put task!!!");
+            return this.spawns[0];
+        }
+        return this.spawns[minnum];
+    }
+
     public checkSourcer() {
-        if (this.room.energyAvailable < 550)
+        if (this.room.energyCapacityAvailable < 550)
             return;
         var sources = this.room.find(FIND_SOURCES);
         for (var i = 0; i < sources.length; i++) {
@@ -41,7 +57,7 @@ export class SpawnRoom {
                 case 1:
                     const path = this.room.findPath(spawn.pos, sources[i].pos, { ignoreCreeps: true });
                     var time = sourcers[0].ticksToLive;
-                    if (time && time < path.length + 12) {
+                    if (time && time < path.length + 20) {
                         NeedSourcer = true;
                     } else {
                         NeedSourcer = false;
@@ -70,16 +86,40 @@ export class SpawnRoom {
     public checkHarvester() {
         if (!this.room.controller)
             return;
-        const creeps = this.room.find(FIND_CREEPS);
+        const harvesters = _.filter(Game.creeps, (creep) => creep.memory.role == 'harvester');
         if (this.room.controller.level < 3) {
-            if (creeps.length + this.spawns[0].memory.queue.length < 14) {
+            if (harvesters.length + this.spawns[0].memory.queue.length < 14) {
                 this.createharvester(this.spawns[0]);
+            }
+        } else if (this.room.controller.level == 3) {
+            if (this.spawns[0].memory.queue.length > 1)
+                return;
+            let nonstoreEnergy = this.nonstoreEnergy();
+            if (nonstoreEnergy > 8000 || (nonstoreEnergy > 1500 && nonstoreEnergy > this.room.memory.nonstoreEnergy)) {
+                this.createharvester(this.findspawn());
             }
         } else {
             var site = this.room.find(FIND_CONSTRUCTION_SITES);
-            if (site.length > 0 && creeps.length + this.spawns[0].memory.queue.length < 2) {
-                this.createharvester(this.spawns[0]);
+            //console.log("here")
+            if ((site.length > 0 && harvesters.length + this.spawns[0].memory.queue.length < 2 )|| harvesters.length < 3) {
+                this.createharvester(this.findspawn());
             }
+        }
+    }
+
+    public checkCarrier() {
+        if (this.storeEnergy() == 0)
+            return;
+        let nonstoreEnergy = this.nonstoreEnergy();
+        if (nonstoreEnergy > 15000 || (nonstoreEnergy > this.room.memory.nonstoreEnergy && nonstoreEnergy > 1500)) {
+            this.createCarrier(this.findspawn());
+        }
+    }
+
+    public checkUpgrader() {
+        let storeEnergy = this.storeEnergy();
+        if (storeEnergy > 8000 || (storeEnergy > 1500 && storeEnergy > this.room.memory.storeEnergy)) {
+            this.createUpgrader(this.findspawn());
         }
     }
 
@@ -107,10 +147,21 @@ export class SpawnRoom {
                 return (structure.structureType == STRUCTURE_STORAGE)
             }
         });
-        return (<StructureContainer>storage[0]).store.energy;
+        if (storage.length > 0)
+            return (<StructureContainer>storage[0]).store.energy;
+        else
+            return 0;
+    }
+
+    public updateEnergy() {
+        console.log("storeEnergy:" + this.room.memory.storeEnergy + " => " + this.storeEnergy())
+        console.log("nonstoreEnergy:" + this.room.memory.nonstoreEnergy + " => " + this.nonstoreEnergy())
+        this.room.memory.storeEnergy = this.storeEnergy();
+        this.room.memory.nonstoreEnergy = this.nonstoreEnergy();
     }
 
     public checkRoad(): boolean {
+
         if (this.roadBetweenControllerAndSources(this.room))
             return true;
         if (this.roadBetweenSpawnsAndSources(this.room))
@@ -126,15 +177,26 @@ export class SpawnRoom {
         for (var i = 0; i < sources.length; i++) {
             const road = room.findPath(sources[i].pos, room.controller.pos, { ignoreCreeps: true })
             for (var r = 0; r < road.length; r++) {
-                if (room.createConstructionSite(road[r].x, road[r].y, STRUCTURE_ROAD))
-                    builded = true;
+                var look = room.lookAt(road[r].x, road[r].y);
+                var isExist = false;
+                for (var l = 0; l < look.length; l++) {
+                    if (look[l].structure) {
+                        isExist = true;
+                        break;
+                    }
+                }
+                if (!isExist) {
+                    if (room.createConstructionSite(road[r].x, road[r].y, STRUCTURE_ROAD)) {
+                        console.log(road[r].x, road[r].y)
+                        builded = true;
+                    }
+                }
             }
             if (builded)
                 break;
         }
         return builded;
     }
-
     public roadBetweenSpawnsAndSources(room: Room): boolean {
         var spawns = room.find(FIND_STRUCTURES, {
             filter: (structure) => {
@@ -149,19 +211,28 @@ export class SpawnRoom {
             for (var j = 0; j < spawns.length; j++) {
                 const road = room.findPath(sources[i].pos, spawns[j].pos, { ignoreCreeps: true })
                 for (var r = 0; r < road.length; r++) {
-                    if (room.createConstructionSite(road[r].x, road[r].y, STRUCTURE_ROAD))
-                        builded = true;
+                    var look = room.lookAt(road[r].x, road[r].y);
+                    var isExist = false;
+                    for (var l = 0; l < look.length; l++) {
+                        if (look[l].structure) {
+                            isExist = true;
+                            break;
+                        }
+                    }
+                    if (!isExist) {
+                        if (room.createConstructionSite(road[r].x, road[r].y, STRUCTURE_ROAD))
+                            builded = true;
+                    }
                 }
                 if (builded)
                     break;
             }
-            if (builded)
-                break;
         }
         return builded;
     }
 
     public checkExtension(): boolean {
+
         if (this.room.controller) {
             const extensions = this.room.find(FIND_STRUCTURES, {
                 filter: (structure) => {
@@ -181,6 +252,8 @@ export class SpawnRoom {
     public extensionLimit(controllerlvl: number): number {
         switch (controllerlvl) {
             case 1:
+                return 0;
+            case 2:
                 return 5;
             default:
                 return (controllerlvl - 2) * 10
@@ -188,6 +261,7 @@ export class SpawnRoom {
     }
 
     public buildextention(room: Room): boolean {
+
         if (room.controller) {
             var builded = false;
             const sources = room.find(FIND_SOURCES);
@@ -291,10 +365,11 @@ export class SpawnRoom {
         const sources = room.find(FIND_SOURCES);
         if (room.controller) {
             const road = room.findPath(room.controller.pos, sources[0].pos, { ignoreCreeps: true })
-            if (room.createConstructionSite(road[2].x, road[2].y, STRUCTURE_STORAGE))
-                return true;
+            room.createConstructionSite(road[2].x, road[2].y, STRUCTURE_STORAGE)
+            room.createConstructionSite(road[1].x, road[1].y, STRUCTURE_STORAGE)
+            room.createConstructionSite(road[3].x, road[3].y, STRUCTURE_STORAGE)
         }
-        return false;
+        return true;
     }
 
     public createharvester(spawn: StructureSpawn) {
@@ -350,7 +425,7 @@ export class SpawnRoom {
         const repairercost = [250, 500, 750];
 
         for (var i = repairercost.length - 1; i >= 0; i--) {
-            if (this.room.energyAvailable >= repairercost[i]) {
+            if (this.room.energyCapacityAvailable >= repairercost[i]) {
                 var minspawn = -1;
                 var mintasks = 9999;
                 for (var j = 0; j < this.spawns.length; j++) {
@@ -379,7 +454,7 @@ export class SpawnRoom {
         const carriercost = [250, 500, 750, 1250];
 
         for (var i = carriercost.length - 1; i >= 0; i--) {
-            if (this.room.energyAvailable >= carriercost[i]) {
+            if (this.room.energyCapacityAvailable >= carriercost[i]) {
                 var minspawn = -1;
                 var mintasks = 9999;
                 for (var j = 0; j < this.spawns.length; j++) {
@@ -414,7 +489,7 @@ export class SpawnRoom {
         const upgradercost = [650, 1250, 2450];
 
         for (var i = upgradercost.length - 1; i >= 0; i--) {
-            if (this.room.energyAvailable >= upgradercost[i]) {
+            if (this.room.energyCapacityAvailable >= upgradercost[i]) {
                 var minspawn = -1;
                 var mintasks = 9999;
                 for (var j = 0; j < this.spawns.length; j++) {

@@ -26,6 +26,7 @@ export abstract class status {
     }
 
     public getEnergyFromDropOrContainer(creep: Creep) : string {
+
         const closestcontainer = creep.pos.findClosestByPath(FIND_STRUCTURES, {
             filter: (structure) => {
                 return (structure.structureType == STRUCTURE_CONTAINER && structure.store.energy > creep.carryCapacity);
@@ -36,7 +37,9 @@ export abstract class status {
                 return (drop.amount > creep.carryCapacity);
             }
         });
+
         if (closestcontainer){
+
             if (closestdrop) {
                 const conpath = creep.pos.findPathTo(closestcontainer);
                 const droppath = creep.pos.findPathTo(closestdrop);
@@ -63,15 +66,16 @@ export abstract class status {
     }
 
     public getEnergyFromStorage(creep: Creep) : boolean {
-        const closestcontainer = creep.pos.findClosestByPath(FIND_STRUCTURES, {
+        const closestStorage = creep.pos.findClosestByPath(FIND_STRUCTURES, {
             filter: (structure) => {
                 return (structure.structureType == STRUCTURE_STORAGE && structure.store.energy > creep.carryCapacity);
             }
         });
-        if (closestcontainer) {
-            creep.memory.target = closestcontainer.id;
+        if (closestStorage) {
+            creep.memory.target = closestStorage.id;
             return true;
         }
+
         return false;
     }
 

@@ -23,9 +23,12 @@ export class getEnergyFromAll extends status {
                 return statusType.getdrop;
 
             default:
-                if (this.getEnergyFromStorage) {
+
+                if (this.getEnergyFromStorage(creep)) {
+
                     return statusType.withdraw;
                 }
+
                 this.harvest(creep);
                 return statusType.harvest;
         }

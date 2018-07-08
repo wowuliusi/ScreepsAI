@@ -1,6 +1,8 @@
 
 import { SpawnRoom } from "spawnRoom";
 import { statusMachine } from "statusMachine";
+import { StrucSpawn } from "struc.spawn";
+import { Dictionary } from "lodash";
 
 export class brain {
     public static run() {
@@ -50,94 +52,44 @@ export class brain {
                 }
                 if (Game.time % 10 == 0)
                     _myroom.checkSourcer();
-                if (Game.time % 50 == 0){
+                if (Game.time % 50 == 0) {
                     if (!_myroom.checkExtension())
-                        if (_myroom.checkRoad())
-                            if (_myroom.checkContainer())
-                                _myroom.checkStorage;
+                        if (!_myroom.checkRoad()) {
+                            _myroom.checkContainer()
+                            _myroom.checkStorage();
+                        }
                 }
 
+                if (Game.time % 50 == 0) {
+                    _myroom.updateEnergy();
+                }
 
                 if (Game.time % 5 == 0)
                     _myroom.checkSourcer();
 
-                if (Game.time % 5 == 1)
+                if (Game.time % 50 == 1)
                     _myroom.checkHarvester();
 
+                if (Game.time % 50 == 2)
+                    _myroom.checkCarrier();
 
-                if (Game.time % 50 == 0) {
-                    var con = Game.spawns["Spawn1"].room.controller;
-                    if (con) {
-                        if (con.level < 3) {
-                            if (creeps.length < 14) {
-                                myroom.createharvester(room);
-                            }
-                        } else {
-                            if (Game.time % 100 == 0) {
-                                var energy = 0;
-                                var nonstoreEnergy = 0;
-
-                                if (repairer < 1)
-                                    myroom.createRepairer(room);
-
-                                var cons = room.find(FIND_STRUCTURES, {
-                                    filter: (structure) => {
-                                        return (structure.structureType == STRUCTURE_CONTAINER)
-                                    }
-                                });
-                                for (var i = 0; i < cons.length; i++) {
-                                    var str = <StructureContainer>cons[i];
-                                    energy += str.store.energy;
-                                    nonstoreEnergy += str.store.energy;
-                                }
-                                if (Game.time % 100 == 0) {
-                                    cons = room.find(FIND_STRUCTURES, {
-                                        filter: (structure) => {
-                                            return (structure.structureType == STRUCTURE_STORAGE)
-                                        }
-                                    });
-                                    for (var i = 0; i < cons.length; i++) {
-                                        var str2 = <StructureStorage>cons[i];
-                                        energy += str2.store.energy;
-                                    }
-                                    var dropped = room.find(FIND_DROPPED_RESOURCES)
-                                    for (var i = 0; i < dropped.length; i++) {
-                                        energy += dropped[i].amount;
-                                        nonstoreEnergy += dropped[i].amount;
-                                    }
-                                    var storage = room.find(FIND_STRUCTURES, {
-                                        filter: (structure) => {
-                                            return (structure.structureType == STRUCTURE_STORAGE)
-                                        }
-                                    });
-                                    if (creeps.length < 4 || energy > 4000 || (energy > room.memory.availableEnergy && energy > 1500)) {
-                                        var site = room.find(FIND_CONSTRUCTION_SITES);
-                                        if (site.length > 0 || storage.length == 0 || energy - nonstoreEnergy < 1000)
-                                            myroom.createharvester(room);
-                                        else {
-                                            myroom.createUpgrader(room);
-                                        }
-                                    }
-                                    if (storage.length > 0 && (nonstoreEnergy > 15000 || (nonstoreEnergy > room.memory.nonstoreEnergy && nonstoreEnergy > 1500))) {
-                                        myroom.createCarrier(room);
-                                    }
-
-                                    console.log("energy:" + room.memory.availableEnergy + "=> " + energy);
-                                    console.log("nonstoreEnergy:" + room.memory.nonstoreEnergy + "=> " + nonstoreEnergy);
-                                    room.memory.availableEnergy = energy;
-                                    room.memory.nonstoreEnergy = nonstoreEnergy;
-
-
-                                }
-                            }
-                        }
-                    }
-
-
-                }
+                if (Game.time % 50 == 3)
+                    _myroom.checkUpgrader();
             }
+        }
 
-
+        for (var name in Game.spawns) {
+            let spawn = new StrucSpawn(Game.spawns[name]);
+            spawn.work();
+        }
+        var Machine: Dictionary<statusMachine> = {};
+        Machine["harvester"] = new statusMachine("harvester");
+        Machine["upgrader"] = new statusMachine("upgrader");
+        Machine["sourcer"] = new statusMachine("sourcer");
+        Machine["carrier"] = new statusMachine("carrier");
+        Machine["repairer"] = new statusMachine("repairer");
+        for (var name in Game.creeps) {
+            Machine[Game.creeps[name].memory.role].execute(Game.creeps[name]);
         }
     }
 }
